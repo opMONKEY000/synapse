@@ -1,0 +1,337 @@
+// Synapse - AI Learning Platform Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Authentication & User Management
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  documents     Document[]
+  subjects      Subject[]
+  conversations Conversation[]
+  recallSessions RecallSession[]
+  reviewItems   ReviewItem[]
+  subscription  UserSubscription?
+  usage         UserUsage?
+  generatedLessons Lesson[]
+  nodeMastery      NodeMastery[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// Learning Methods & Subjects
+// ============================================
+
+enum LearningMethod {
+  MEMORY_DRIVEN      // History, Psychology, Environmental Science - memorization/recall
+  SKILL_DRIVEN       // Math, Physics - problem-solving and step-by-step
+  CREATIVE_ANALYTICAL // English, Literature - interpretation and analysis
+}
+
+model Subject {
+  id             String         @id @default(cuid())
+  userId         String
+  name           String
+  learningMethod LearningMethod
+  icon           String?        // Icon identifier
+  color          String?        // Color identifier
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessons        Conversation[] @relation("SubjectLessons")
+  generatedLessons Lesson[]
+
+  @@map("subjects")
+}
+
+// ============================================
+// Document & Learning Content
+// ============================================
+
+model Document {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  subject     String?  // History, Math, Physics
+  description String?
+  fileUrl     String   // Supabase storage URL
+  fileType    String   // pdf, txt, etc.
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timelines   Timeline[]
+  conversations Conversation[]
+
+  @@map("documents")
+}
+
+model Timeline {
+  id         String   @id @default(cuid())
+  documentId String
+  title      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  events     Event[]
+
+  @@map("timelines")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  timelineId  String
+  title       String
+  description String   @db.Text
+  order       Int      // Position in timeline
+  date        String?  // Historical date (e.g., "1770")
+  isUserFilled Boolean @default(false) // Track if user filled this in
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  timeline    Timeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+
+  @@map("events")
+}
+
+// ============================================
+// AI Conversations & Teaching
+// ============================================
+
+model Conversation {
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String?
+  subjectId  String?  // New: Link to Subject model
+  title      String
+  subject    String?  // Legacy: Kept for backward compatibility
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  subjectModel Subject? @relation("SubjectLessons", fields: [subjectId], references: [id], onDelete: SetNull)
+  messages   Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // 'user' | 'assistant' | 'system'
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  // Relations
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// ============================================
+// Recall & Review System
+// ============================================
+
+model RecallSession {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  completedAt DateTime?
+  score       Float?   // Percentage correct
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewItems ReviewItem[]
+
+  @@map("recall_sessions")
+}
+
+model ReviewItem {
+  id              String   @id @default(cuid())
+  userId          String
+  recallSessionId String?
+  question        String   @db.Text
+  correctAnswer   String   @db.Text
+  userAnswer      String?  @db.Text
+  isCorrect       Boolean?
+  difficulty      Int      @default(1) // 1-5 scale
+  nextReviewAt    DateTime // Spaced repetition
+  reviewCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recallSession   RecallSession? @relation(fields: [recallSessionId], references: [id], onDelete: SetNull)
+
+  @@map("review_items")
+}
+
+// ============================================
+// Subscription & Usage
+// ============================================
+
+model UserSubscription {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  stripeCustomerId       String?  @unique @map(name: "stripe_customer_id")
+  stripeSubscriptionId   String?  @unique @map(name: "stripe_subscription_id")
+  stripePriceId          String?  @map(name: "stripe_price_id")
+  stripeCurrentPeriodEnd DateTime? @map(name: "stripe_current_period_end")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_subscriptions")
+}
+
+model UserUsage {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  dailyLessonCount Int      @default(0)
+  lastResetDate    DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_usage")
+}
+
+// ============================================
+// AI Lesson Generation (Two-Phase)
+// ============================================
+
+model Lesson {
+  id              String   @id @default(cuid())
+  userId          String
+  subjectId       String
+  topic           String
+  difficultyLevel String   // beginner, intermediate, advanced
+  status          String   // GENERATING_STRUCTURE, STRUCTURE_COMPLETE, IN_PROGRESS, COMPLETED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  nodes           KnowledgeNode[]
+
+  @@map("lessons")
+}
+
+model KnowledgeNode {
+  id              String   @id @default(cuid())
+  lessonId        String
+  title           String
+  vocabularyTerms String[] // Array of strings
+  metadataHint    String?
+  order           Int
+  status          String   // PENDING_CONTENT, COMPLETE
+
+  // Content fields (populated on-demand)
+  summary         String?  @db.Text
+  vocabulary      Json?    // Array of {term, definition}
+  thinkingQuestion String? @db.Text
+  metadata        Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  lesson          Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  mastery         NodeMastery[]
+
+  @@map("knowledge_nodes")
+}
+
+model NodeMastery {
+  id              String   @id @default(cuid())
+  userId          String
+  nodeId          String
+  masteryScore    Float    // 0.0 to 1.0
+  recallType      String   // PARTIAL, FULL_FORWARD, FULL_BACKWARD
+  userResponse    String?  @db.Text
+  aiEvaluation    String?  @db.Text
+  grade           String?  // F to A+
+  attemptedAt     DateTime @default(now())
+
+  // Relations
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  node            KnowledgeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, nodeId, attemptedAt])
+  @@map("node_mastery")
+}
