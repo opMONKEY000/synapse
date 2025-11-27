@@ -1,13 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { WhiteboardCanvas, DemoState } from "@/components/lesson/whiteboard-canvas";
 import { Loader2, ArrowLeft } from "lucide-react";
 
+interface LessonNode {
+  id: string;
+  title: string;
+  summary?: string | null;
+  status?: string;
+  vocabulary?: unknown;
+  vocabularyTerms?: string[];
+  thinkingQuestion?: string | null;
+  metadata?: unknown;
+  metadataHint?: string | null;
+  isGenerating?: boolean;
+}
+
 interface LessonViewProps {
   lessonId: string;
-  initialNodes: any[];
+  initialNodes: LessonNode[];
   subjectId: string;
   initialIndex?: number;
   initialRecallCycle?: number;
@@ -36,7 +49,12 @@ export function LessonView({
   });
   const [recallCycle, setRecallCycle] = useState(initialRecallCycle);
   const [recallStep, setRecallStep] = useState(initialRecallStep);
-  const [isInitialLoading, setIsInitialLoading] = useState(initialIndex === 0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [hasDisplayedCanvas, setHasDisplayedCanvas] = useState(false);
+
+  const requiredNodesReady = useMemo(() => {
+    return nodes.slice(0, currentIndex + 1).every(node => node.status === "COMPLETE" || (!node.isGenerating && Boolean(node.summary)));
+  }, [nodes, currentIndex]);
 
   // Pre-loading logic
   const generateContent = useCallback(async (index: number) => {
@@ -62,22 +80,20 @@ export function LessonView({
     }
   }, [lessonId, nodes]);
 
-  useEffect(() => {
-    generateContent(currentIndex);
-    generateContent(currentIndex + 1);
-  }, [currentIndex, generateContent]);
+useEffect(() => {
+  generateContent(currentIndex);
+  generateContent(currentIndex + 1);
+}, [currentIndex, generateContent]);
 
-  // Check if initial nodes are loaded (first two nodes)
-  useEffect(() => {
-    if (isInitialLoading && initialIndex === 0) {
-      const firstNodeReady = nodes[0]?.status === "COMPLETE";
-      const secondNodeReady = nodes.length > 1 ? nodes[1]?.status === "COMPLETE" : true;
-      
-      if (firstNodeReady && secondNodeReady) {
-        setIsInitialLoading(false);
-      }
-    }
-  }, [nodes, isInitialLoading, initialIndex]);
+useEffect(() => {
+  if (hasDisplayedCanvas) return;
+  if (requiredNodesReady) {
+    setIsInitialLoading(false);
+    setHasDisplayedCanvas(true);
+  } else {
+    setIsInitialLoading(true);
+  }
+}, [requiredNodesReady, hasDisplayedCanvas]);
 
   // Helper to determine recall target based on cycle and step
   const getRecallTarget = (cycle: number, step: number) => {
@@ -403,14 +419,25 @@ export function LessonView({
     }
   };
 
-  const canvasNodes = nodes.map(node => ({
-    id: node.id,
-    title: node.title,
-    summary: node.summary || (node.isGenerating ? "Generating content..." : "Pending generation..."),
-    vocabulary: Array.isArray(node.vocabulary) ? node.vocabulary : node.vocabularyTerms.map((t: string) => ({ term: t, definition: "Loading..." })),
-    thinkingQuestion: node.thinkingQuestion,
-    metadata: node.metadata || { badge: node.metadataHint },
-  }));
+  const canvasNodes = nodes.map(node => {
+    const vocabulary = Array.isArray(node.vocabulary)
+      ? (node.vocabulary as Array<{ term: string; definition: string }>)
+      : (node.vocabularyTerms ?? []).map((term) => ({ term, definition: "Loading..." }));
+
+    const metadataObject =
+      node.metadata && typeof node.metadata === "object" && !Array.isArray(node.metadata)
+        ? (node.metadata as Record<string, unknown>)
+        : { badge: node.metadataHint ?? undefined };
+
+    return {
+      id: node.id,
+      title: node.title,
+      summary: node.summary || (node.isGenerating ? "Generating content..." : "Pending generation..."),
+      vocabulary,
+      thinkingQuestion: node.thinkingQuestion ?? undefined,
+      metadata: metadataObject,
+    };
+  });
 
   // Show loading screen while initial nodes are being generated
   if (isInitialLoading) {
