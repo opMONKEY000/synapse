@@ -17,6 +17,15 @@ export default function NewLessonPage() {
   const [difficulty, setDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  const loadingMessages = [
+    "Preparing your lesson...",
+    "Sketching out the nodes...",
+    "Organizing concepts...",
+    "Finalizing structure..."
+  ];
+
   // Pre-fill topic from URL if present
   useEffect(() => {
     const topicParam = searchParams.get("topic");
@@ -24,6 +33,17 @@ export default function NewLessonPage() {
       setTopic(topicParam);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isGenerating) {
+      setLoadingMessageIndex(0);
+      interval = setInterval(() => {
+        setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   const getNodeCountRange = (level: string) => {
     switch (level) {
@@ -34,10 +54,13 @@ export default function NewLessonPage() {
     }
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleGenerate = async () => {
     if (!topic.trim()) return;
 
     setIsGenerating(true);
+    setError(null);
     try {
       const response = await fetch("/api/lessons/generate-structure", {
         method: "POST",
@@ -55,9 +78,46 @@ export default function NewLessonPage() {
       router.push(`/subjects/${subjectId}/lessons/${lesson.id}`);
     } catch (error) {
       console.error("Generation error:", error);
+      setError("Failed to generate lesson. Please try again.");
       setIsGenerating(false);
     }
   };
+
+  if (isGenerating) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col relative overflow-hidden font-sans">
+        <WhiteboardBackground />
+        <div className="flex-1 flex flex-col items-center justify-center relative z-10 p-4">
+          <div className="relative">
+             {/* Hand-drawn border effect for loading box */}
+             <div className="absolute inset-0 border-2 border-gray-800 rounded-lg transform rotate-1 translate-x-1 translate-y-1 bg-gray-50 pointer-events-none" />
+             <div className="relative bg-white border-2 border-gray-800 rounded-lg p-12 shadow-sm flex flex-col items-center gap-6 max-w-md w-full">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center border-2 border-blue-200 animate-pulse">
+                  <BrainCircuit className="w-8 h-8 text-blue-600" />
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-2xl font-chalk font-bold text-gray-900">
+                    {loadingMessages[loadingMessageIndex]}
+                  </h3>
+                  <p className="text-gray-500 font-chalk">
+                    This might take a moment...
+                  </p>
+                </div>
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 animate-progress origin-left" style={{ width: "100%", animation: "progress 2s infinite linear" }} />
+                </div>
+             </div>
+          </div>
+        </div>
+        <style jsx global>{`
+          @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col relative overflow-hidden font-sans">
@@ -140,6 +200,13 @@ export default function NewLessonPage() {
                   </div>
                 </div>
 
+                {/* Error Message */}
+                {error && (
+                  <div className="text-red-500 font-chalk text-center bg-red-50 p-3 rounded-lg border border-red-200">
+                    {error}
+                  </div>
+                )}
+
                 {/* Generate Button */}
                 <div className="pt-4 flex justify-end">
                   <MarkerButton
@@ -148,14 +215,7 @@ export default function NewLessonPage() {
                     disabled={!topic.trim() || isGenerating}
                     className="!text-xl !px-8 !py-3 min-w-[200px] flex justify-center"
                   >
-                    {isGenerating ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Thinking...</span>
-                      </div>
-                    ) : (
-                      "Generate Lesson"
-                    )}
+                    Generate Lesson
                   </MarkerButton>
                 </div>
               </div>

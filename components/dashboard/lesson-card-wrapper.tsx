@@ -9,6 +9,7 @@ interface LessonCardWrapperProps {
     id: string;
     title: string;
     updatedAt: Date;
+    type?: "conversation" | "lesson";
   }>;
 }
 
@@ -29,6 +30,7 @@ export function LessonCardWrapper({ subjectId, lessons }: LessonCardWrapperProps
           title={lesson.title}
           date={lesson.updatedAt.toLocaleDateString()}
           progress={0} // Placeholder
+          type={lesson.type}
           onDelete={handleDelete}
         />
       ))}

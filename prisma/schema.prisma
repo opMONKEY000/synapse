@@ -281,6 +281,25 @@ model Lesson {
   topic           String
   difficultyLevel String   // beginner, intermediate, advanced
   status          String   // GENERATING_STRUCTURE, STRUCTURE_COMPLETE, IN_PROGRESS, COMPLETED
+  
+  // Progress tracking
+  currentNodeIndex     Int      @default(0)
+  currentPhase         String   @default("teaching") // teaching, recall, complete
+  currentCycleNumber   Int      @default(0)
+  completedCycles      Int      @default(0)
+  
+  // Recall State Persistence
+  recallCycle          Int      @default(0)
+  recallStep           Int      @default(0)
+  resumeIndex          Int?
+  
+  // Performance metrics
+  averageGrade         Float?
+  vocabularyMastery    Float?
+  
+  // Completion
+  completedAt          DateTime?
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -307,6 +326,15 @@ model KnowledgeNode {
   thinkingQuestion String? @db.Text
   metadata        Json?
 
+  // Spatial positioning
+  x               Float?
+  y               Float?
+  
+  // Recall tracking
+  lastRecalledAt  DateTime?
+  recallCount     Int      @default(0)
+  averageGrade    Float?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -326,6 +354,15 @@ model NodeMastery {
   userResponse    String?  @db.Text
   aiEvaluation    String?  @db.Text
   grade           String?  // F to A+
+  
+  // Cycle context
+  cycleNumber     Int?
+  hintNodeIds     String[] // Which nodes were shown as hints
+  
+  // Structured feedback
+  strengths       String[] // What they got right
+  missed          String[] // What they missed
+  
   attemptedAt     DateTime @default(now())
 
   // Relations

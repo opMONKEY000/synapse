@@ -12,7 +12,7 @@ interface LessonCardProps {
   title: string;
   date: string;
   progress?: number;
-  type?: "conversation" | "document";
+  type?: "conversation" | "document" | "lesson";
   onDelete?: () => void;
 }
 

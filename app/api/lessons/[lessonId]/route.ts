@@ -36,8 +36,9 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting lesson:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to delete lesson" },
+      { error: "Failed to delete lesson", details: errorMessage },
       { status: 500 }
     );
   }

@@ -30,9 +30,14 @@ export default async function LessonPage({
 
   return (
     <LessonView 
-      lessonId={lesson.id} 
+      lessonId={lessonId}
       initialNodes={lesson.nodes} 
-      subjectId={subjectId} 
+      subjectId={subjectId}
+      initialIndex={lesson.currentNodeIndex}
+      initialRecallCycle={lesson.recallCycle}
+      initialRecallStep={lesson.recallStep}
+      initialResumeIndex={lesson.resumeIndex}
+      initialPhase={lesson.currentPhase as "teaching" | "recall"}
     />
   );
 }

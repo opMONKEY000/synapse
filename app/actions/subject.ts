@@ -54,8 +54,32 @@ export async function getSubjectById(id: string) {
       lessons: {
         orderBy: { updatedAt: "desc" },
       },
+      generatedLessons: {
+        orderBy: { updatedAt: "desc" },
+      },
     },
   });
 
-  return subject;
+  if (!subject) return null;
+
+  // Normalize and combine lessons
+  const normalizedLessons = [
+    ...subject.lessons.map(l => ({
+      id: l.id,
+      title: l.title,
+      updatedAt: l.updatedAt,
+      type: 'conversation' as const
+    })),
+    ...subject.generatedLessons.map(l => ({
+      id: l.id,
+      title: l.topic, // Map topic to title
+      updatedAt: l.updatedAt,
+      type: 'lesson' as const
+    }))
+  ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
+  return {
+    ...subject,
+    lessons: normalizedLessons,
+  };
 }

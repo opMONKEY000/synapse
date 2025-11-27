@@ -47,7 +47,7 @@ interface DemoStep {
   phase: "teaching" | "prediction" | "recall" | "quiz";
   subPhase?: "content" | "user-question" | "ai-answer" | "continue" | "question" | "user-thinking-response"; 
   desc: string;
-  recallType?: "partial" | "full"; // partial = inline words, full = entire node
+  recallType?: "partial" | "full-forward" | "full-backward" | "full-comprehensive"; // partial = inline words, full = entire node
   erasedNodeId?: string;
   simulatedInput?: string;
   feedback?: "correct" | "incorrect" | null;
@@ -96,16 +96,16 @@ export default function LessonPrototype() {
     { index: 1, phase: "recall", recallType: "partial", erasedNodeId: "2", simulatedInput: "Fire-eaters", feedback: "correct", grade: "A+", desc: "Partial Recall: Success" },
     
     // 5. Forward Recall (Full Node) - Erase Node 2, Context from Node 1
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", desc: "Forward Recall: Context View" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", desc: "Forward Recall: Typing" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", feedback: "correct", grade: "A", desc: "Forward Recall: Success" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", feedback: "correct", grade: "A", aiResponse: "Spot on! You nailed the connection. The violence in Kansas didn't just stay there—it showed the South that 'popular sovereignty' was a failure, directly fueling the rise of the Fire-eaters who demanded federal protection for slavery.", desc: "AI Feedback: Forward" },
+    { index: 1, phase: "recall", recallType: "full-forward", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", desc: "Forward Recall: Context View" },
+    { index: 1, phase: "recall", recallType: "full-forward", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", desc: "Forward Recall: Typing" },
+    { index: 1, phase: "recall", recallType: "full-forward", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", feedback: "correct", grade: "A", desc: "Forward Recall: Success" },
+    { index: 1, phase: "recall", recallType: "full-forward", erasedNodeId: "2", cameraMode: "context-back", contextMessage: "How did Bleeding Kansas lead to the rise of Southern radicals?", simulatedInput: "It radicalized the South, leading Fire-eaters to demand protection...", feedback: "correct", grade: "A", aiResponse: "Spot on! You nailed the connection. The violence in Kansas didn't just stay there—it showed the South that 'popular sovereignty' was a failure, directly fueling the rise of the Fire-eaters who demanded federal protection for slavery.", desc: "AI Feedback: Forward" },
 
     // 6. Backward Recall (Full Node) - Erase Node 2, Context from Node 3
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", desc: "Backward Recall: Context View" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", desc: "Backward Recall: Typing" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", feedback: "correct", grade: "A-", desc: "Backward Recall: Success" },
-    { index: 1, phase: "recall", recallType: "full", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", feedback: "correct", grade: "A-", aiResponse: "Exactly. You correctly identified the catalyst. John Brown's raid was the final straw that convinced Southerners they couldn't live safely in the Union, making the Democratic split—and Lincoln's victory—inevitable.", desc: "AI Feedback: Backward" },
+    { index: 1, phase: "recall", recallType: "full-backward", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", desc: "Backward Recall: Context View" },
+    { index: 1, phase: "recall", recallType: "full-backward", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", desc: "Backward Recall: Typing" },
+    { index: 1, phase: "recall", recallType: "full-backward", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", feedback: "correct", grade: "A-", desc: "Backward Recall: Success" },
+    { index: 1, phase: "recall", recallType: "full-backward", erasedNodeId: "2", cameraMode: "context-forward", contextMessage: "What events in 1859 made the Democratic split inevitable?", simulatedInput: "John Brown's raid terrified the South...", feedback: "correct", grade: "A-", aiResponse: "Exactly. You correctly identified the catalyst. John Brown's raid was the final straw that convinced Southerners they couldn't live safely in the Union, making the Democratic split—and Lincoln's victory—inevitable.", desc: "AI Feedback: Backward" },
 
     // 7. Quiz Phase - Checkpoint Overlay
     { index: 2, phase: "quiz", quizQuestion: "Who raided Harpers Ferry?", desc: "Quiz: Checkpoint Question" },

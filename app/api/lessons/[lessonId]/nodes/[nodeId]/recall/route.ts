@@ -5,8 +5,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 const recallSchema = z.object({
-  recallType: z.enum(["partial", "full-forward", "full-backward"]),
+  recallType: z.enum(["partial", "full-forward", "full-backward", "full-comprehensive"]),
   userResponse: z.string(),
+  cycleNumber: z.number().optional(),
+  hintNodeIds: z.array(z.string()).optional(),
+  term: z.string().optional(), // For partial recall
 });
 
 export async function POST(
@@ -21,7 +24,7 @@ export async function POST(
 
     const { lessonId, nodeId } = await params;
     const body = await req.json();
-    const { recallType, userResponse } = recallSchema.parse(body);
+    const { recallType, userResponse, cycleNumber, hintNodeIds, term } = recallSchema.parse(body);
 
     // Verify ownership and fetch node with context
     const lesson = await prisma.lesson.findUnique({
@@ -52,63 +55,27 @@ export async function POST(
     }
 
     const currentNode = lesson.nodes[currentNodeIndex];
-    const previousNode = currentNodeIndex > 0 ? lesson.nodes[currentNodeIndex - 1] : null;
+    
+    // Fetch hint nodes if provided
+    let hintNodesContext = "";
+    if (hintNodeIds && hintNodeIds.length > 0) {
+      const hintNodes = lesson.nodes.filter(n => hintNodeIds.includes(n.id));
+      hintNodesContext = hintNodes.map(n => `- ${n.title}: ${n.summary}`).join("\n");
+    }
 
     let systemPrompt = `You are an expert evaluator for ${lesson.subject.name}. Assess the student's recall accuracy and understanding depth.`;
     let userPrompt = "";
 
     if (recallType === "partial") {
-      // For partial recall, we might need to know WHICH term they are recalling.
-      // However, the prompt in the plan implies we send the term. 
-      // The current schema just sends userResponse. 
-      // Let's assume for partial recall the userResponse might contain the term context or we just evaluate if it matches ANY of the missing terms?
-      // Actually, looking at the prototype, partial recall is specific to a term.
-      // But the API design in the plan just takes userResponse.
-      // Let's assume userResponse is just the term they typed.
-      // We should probably check against the vocabulary list.
-      
-      // Wait, the plan says:
-      // "Vocabulary Term: {term}" in the prompt.
-      // But the request body doesn't have 'term'.
-      // I should probably infer it or ask the client to send it.
-      // For now, I'll assume the client sends just the response and I'll check if it matches any definition or term?
-      // Actually, let's stick to the plan's prompt structure but we need the term.
-      // I will update the schema to optionally accept 'term' or just infer from context.
-      // Let's update the schema to allow extra fields or just put it in userResponse?
-      // No, better to add `term` to the schema for partial recall.
-      
-      // Let's modify the schema slightly to be more flexible or just use userResponse.
-      // If it's partial, userResponse is the term they typed.
-      // We can find the matching term in the node's vocabulary.
-      
-      const vocabList = (currentNode.vocabulary as any[]) || [];
-      // Find which term matches the user response (fuzzy match?)
-      // Or maybe the client should send which term ID it is.
-      // For simplicity, let's assume the userResponse IS the term they are trying to recall.
-      // We can pass the whole vocabulary list to the AI and ask "Did they recall any of these terms correctly?"
-      // Or strictly follow the plan.
-      
-      // Let's stick to the plan's prompt but we need the intended term.
-      // I'll add `term` to the request body schema as optional.
-    }
-
-    // Re-defining schema inside to handle conditional fields if needed, or just use a loose schema.
-    // Let's stick to the plan's prompt structure.
-    
-    if (recallType === "partial") {
-       // We need the term they are trying to define/recall.
-       // I'll assume it's passed in the body, maybe I should update the schema.
-       // Let's check the body again.
-       const bodyWithTerm = body as { term?: string };
-       const term = bodyWithTerm.term || "Unknown Term";
+       const targetTerm = term || "Unknown Term";
        
        // Find correct definition
-       const vocab = (currentNode.vocabulary as any[])?.find((v: any) => v.term === term);
+       const vocab = (currentNode.vocabulary as any[])?.find((v: any) => v.term === targetTerm);
        const correctDefinition = vocab?.definition || "Definition not found";
 
        userPrompt = `Lesson Topic: ${lesson.topic}
 Node: ${currentNode.title}
-Vocabulary Term: ${term}
+Vocabulary Term: ${targetTerm}
 Correct Definition: ${correctDefinition}
 Student Answer: ${userResponse}
 
@@ -124,9 +91,7 @@ Output format: JSON
   "feedback": "string"
 }`;
     } else {
-        // Full recall
-        const contextType = recallType === "full-forward" ? "Previous Node Context" : "Next Node Context";
-        const contextNodeTitle = previousNode?.title || "None";
+        // Full recall (forward, backward, or comprehensive)
         const vocabTerms = currentNode.vocabularyTerms.join(", ");
 
         userPrompt = `Lesson Topic: ${lesson.topic}
@@ -134,7 +99,14 @@ Node: ${currentNode.title}
 Correct Summary: ${currentNode.summary}
 Key Concepts: ${vocabTerms}
 Student Recall: ${userResponse}
-Context: ${contextType} (previous node: ${contextNodeTitle})
+
+Context / Hint Nodes Shown:
+${hintNodesContext || "None"}
+
+Recall Type: ${recallType}
+- full-forward: Recalling this node with the next node as a hint.
+- full-backward: Recalling this node with the previous node as a hint.
+- full-comprehensive: Recalling this node with both neighbors as hints (Mastery Check).
 
 Evaluate the student's recall and provide:
 1. Mastery Score (0.0 to 1.0):
@@ -181,6 +153,8 @@ Output format: JSON
         userResponse,
         aiEvaluation: evaluation.feedback,
         grade: evaluation.grade,
+        cycleNumber,
+        hintNodeIds: hintNodeIds || [],
       },
     });
 
