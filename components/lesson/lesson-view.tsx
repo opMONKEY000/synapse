@@ -36,7 +36,7 @@ export function LessonView({
   });
   const [recallCycle, setRecallCycle] = useState(initialRecallCycle);
   const [recallStep, setRecallStep] = useState(initialRecallStep);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialIndex === 0);
 
   // Pre-loading logic
   const generateContent = useCallback(async (index: number) => {
@@ -67,21 +67,17 @@ export function LessonView({
     generateContent(currentIndex + 1);
   }, [currentIndex, generateContent]);
 
-  // Check if initial loading is complete (first 2 nodes loaded)
+  // Check if initial nodes are loaded (first two nodes)
   useEffect(() => {
-    if (isInitialLoading) {
-      const firstNodeLoaded = nodes[0]?.status === "COMPLETE";
-      const secondNodeLoaded = nodes.length < 2 || nodes[1]?.status === "COMPLETE";
+    if (isInitialLoading && initialIndex === 0) {
+      const firstNodeReady = nodes[0]?.status === "COMPLETE";
+      const secondNodeReady = nodes.length > 1 ? nodes[1]?.status === "COMPLETE" : true;
       
-      if (firstNodeLoaded && secondNodeLoaded) {
-        // Add a small delay for smooth transition
-        const timer = setTimeout(() => {
-          setIsInitialLoading(false);
-        }, 300);
-        return () => clearTimeout(timer);
+      if (firstNodeReady && secondNodeReady) {
+        setIsInitialLoading(false);
       }
     }
-  }, [nodes, isInitialLoading]);
+  }, [nodes, isInitialLoading, initialIndex]);
 
   // Helper to determine recall target based on cycle and step
   const getRecallTarget = (cycle: number, step: number) => {
@@ -165,7 +161,7 @@ export function LessonView({
   const handleContinue = () => {
     // Handle Recall Phase Progression
     if (lessonState.phase === "recall") {
-      if (lessonState.grade) {
+      if (lessonState.grade || lessonState.recallType === "partial") {
         const nextStep = recallStep + 1;
         
         const totalNodes = nodes.length;
@@ -173,6 +169,7 @@ export function LessonView({
         const maxStep = isLastCycle ? 4 : 3;
 
         if (nextStep > maxStep) {
+          // Recall complete - return to the node where recall was triggered and show thinking question
           if (resumeIndex !== null) {
             setCurrentIndex(resumeIndex);
             setResumeIndex(null);
@@ -180,7 +177,7 @@ export function LessonView({
           
           setLessonState(prev => ({
             phase: "teaching",
-            subPhase: "question",
+            subPhase: "question", // Go directly to thinking question after recall
             thinkingFeedback: undefined,
             erasedNodeId: undefined,
             recallType: undefined,
@@ -232,51 +229,60 @@ export function LessonView({
       }
     }
 
-    // Progress through subPhases: content → continue → question → next node
-    if (lessonState.subPhase === "content") {
-      setLessonState(prev => ({ 
-        ...prev, 
-        subPhase: "continue",
-        thinkingFeedback: undefined,
-      }));
-    } else if (lessonState.subPhase === "continue") {
-      // Check for Recall Trigger (every 3 nodes)
-      const isRecallTrigger = (currentIndex + 1) % 3 === 0;
-      
-      if (isRecallTrigger && lessonState.phase === "teaching") {
-        const currentCycle = Math.floor((currentIndex + 1) / 3) - 1;
-        setRecallCycle(currentCycle);
-        setResumeIndex(currentIndex);
-        
-        let startStep = 0;
-        let { targetIndex, type, contextMessage } = getRecallTarget(currentCycle, 0);
-        
-        if (targetIndex < 0) {
-          startStep = 1;
-          const step1 = getRecallTarget(currentCycle, 1);
-          targetIndex = step1.targetIndex;
-          type = step1.type;
-          contextMessage = step1.contextMessage;
-        }
-        
-        setRecallStep(startStep);
-        setCurrentIndex(targetIndex);
-        
-        setLessonState(prev => ({
-          ...prev,
-          phase: "recall",
-          recallType: type,
-          erasedNodeId: nodes[targetIndex].id,
-          contextMessage: contextMessage,
-          feedback: null,
-          grade: undefined,
-          aiResponse: undefined
-        }));
-        return;
-      }
+    // Check if this is a node before recall (every 3rd node: index 2, 5, 8, etc.)
+    const isNodeBeforeRecall = (currentIndex + 1) % 3 === 0;
 
-      setLessonState(prev => ({ ...prev, subPhase: "question" }));
+    // Progress through subPhases
+    if (lessonState.subPhase === "content") {
+      // If this is the node before recall, go to "continue" which will trigger recall
+      // Otherwise, go directly to "question" (thinking question)
+      if (isNodeBeforeRecall) {
+        setLessonState(prev => ({ 
+          ...prev, 
+          subPhase: "continue",
+          thinkingFeedback: undefined,
+        }));
+      } else {
+        setLessonState(prev => ({ 
+          ...prev, 
+          subPhase: "question",
+          thinkingFeedback: undefined,
+        }));
+      }
+    } else if (lessonState.subPhase === "continue") {
+      // This should only happen on nodes before recall
+      // Trigger recall
+      const currentCycle = Math.floor((currentIndex + 1) / 3) - 1;
+      setRecallCycle(currentCycle);
+      setResumeIndex(currentIndex);
+      
+      let startStep = 0;
+      let { targetIndex, type, contextMessage } = getRecallTarget(currentCycle, 0);
+      
+      if (targetIndex < 0) {
+        startStep = 1;
+        const step1 = getRecallTarget(currentCycle, 1);
+        targetIndex = step1.targetIndex;
+        type = step1.type;
+        contextMessage = step1.contextMessage;
+      }
+      
+      setRecallStep(startStep);
+      setCurrentIndex(targetIndex);
+      
+      setLessonState(prev => ({
+        ...prev,
+        phase: "recall",
+        recallType: type,
+        erasedNodeId: nodes[targetIndex].id,
+        contextMessage: contextMessage,
+        feedback: null,
+        grade: undefined,
+        aiResponse: undefined
+      }));
+      return;
     } else if (lessonState.subPhase === "question" || lessonState.subPhase === "user-thinking-response") {
+      // Move to next node
       if (currentIndex < nodes.length - 1) {
         setCurrentIndex(prev => prev + 1);
         setLessonState(prev => ({ 
@@ -328,30 +334,44 @@ export function LessonView({
   const handleThinkingSubmit = async (response: string) => {
     const currentNode = nodes[currentIndex];
     
-    setLessonState(prev => ({
-      ...prev,
-      subPhase: "user-thinking-response",
-      userThinkingResponse: response,
-    }));
-
-    try {
-      const res = await fetch(`/api/lessons/${lessonId}/nodes/${currentNode.id}/thinking-feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userResponse: response }),
-      });
-
-      if (!res.ok) throw new Error("Failed to get feedback");
-
-      const { feedback } = await res.json();
-
+    // Immediately move to next node
+    if (currentIndex < nodes.length - 1) {
+      setCurrentIndex(prev => prev + 1);
       setLessonState(prev => ({
-        ...prev,
-        thinkingFeedback: feedback,
+        phase: "teaching",
+        subPhase: "content",
+        userThinkingResponse: response,
+        thinkingFeedback: undefined, // Will be set after API call
+        aiThinking: true, // Show loading indicator
       }));
-      
-    } catch (error) {
-      console.error("Thinking Feedback Error:", error);
+
+      // Fetch AI feedback in background
+      try {
+        const res = await fetch(`/api/lessons/${lessonId}/nodes/${currentNode.id}/thinking-feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userResponse: response }),
+        });
+
+        if (!res.ok) throw new Error("Failed to get feedback");
+
+        const { feedback } = await res.json();
+
+        setLessonState(prev => ({
+          ...prev,
+          thinkingFeedback: feedback,
+          aiThinking: false,
+        }));
+        
+      } catch (error) {
+        console.error("Thinking Feedback Error:", error);
+        setLessonState(prev => ({
+          ...prev,
+          aiThinking: false,
+        }));
+      }
+    } else {
+      alert("Lesson Complete!");
     }
   };
 
@@ -392,6 +412,21 @@ export function LessonView({
     metadata: node.metadata || { badge: node.metadataHint },
   }));
 
+  // Show loading screen while initial nodes are being generated
+  if (isInitialLoading) {
+    return (
+      <div className="h-screen w-full bg-white relative flex items-center justify-center">
+        <div className="flex flex-col items-center gap-6">
+          <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Preparing your lesson...</h2>
+            <p className="text-gray-600">Loading the first nodes</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-full bg-white relative">
       <button
@@ -402,39 +437,21 @@ export function LessonView({
         <ArrowLeft className="w-6 h-6 text-gray-700 group-hover:text-blue-600 transition-colors" />
       </button>
 
-      {isInitialLoading ? (
-        <div className="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-          <div className="flex flex-col items-center gap-6">
-            <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-                Preparing Your Lesson
-              </h2>
-              <p className="text-gray-600">
-                Loading the first nodes...
-              </p>
-            </div>
-          </div>
+      <WhiteboardCanvas
+        nodes={canvasNodes}
+        currentIndex={currentIndex}
+        demoState={lessonState}
+        onContinue={handleContinue}
+        onAskQuestion={handleAskQuestion}
+        onThinkingSubmit={handleThinkingSubmit}
+        onRecallSubmit={handleRecallSubmit}
+      />
+      
+      {nodes[currentIndex]?.isGenerating && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow-sm border border-gray-200 flex items-center gap-2 z-50">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+          <span className="text-sm font-medium text-gray-600">Generating content...</span>
         </div>
-      ) : (
-        <>
-          <WhiteboardCanvas
-            nodes={canvasNodes}
-            currentIndex={currentIndex}
-            demoState={lessonState}
-            onContinue={handleContinue}
-            onAskQuestion={handleAskQuestion}
-            onThinkingSubmit={handleThinkingSubmit}
-            onRecallSubmit={handleRecallSubmit}
-          />
-          
-          {nodes[currentIndex]?.isGenerating && (
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow-sm border border-gray-200 flex items-center gap-2 z-50">
-              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-              <span className="text-sm font-medium text-gray-600">Generating content...</span>
-            </div>
-          )}
-        </>
       )}
     </div>
   );

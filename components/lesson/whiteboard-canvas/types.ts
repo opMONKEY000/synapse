@@ -16,4 +16,5 @@ export interface DemoState {
   userThinkingResponse?: string;
   thinkingFeedback?: string;
   userResponse?: string; // For recall
+  aiThinking?: boolean; // Loading state for AI feedback
 }

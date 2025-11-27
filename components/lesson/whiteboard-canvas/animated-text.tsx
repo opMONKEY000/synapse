@@ -11,7 +11,9 @@ interface AnimatedTextProps {
   feedback?: "correct" | "incorrect" | null;
   onComplete?: () => void;
   onReset?: () => void;
-  onPartialSubmit?: (term: string, input: string) => void;
+  onPartialSubmit?: (term: string, input: string) => Promise<{ correct: boolean }>;
+  onAllTermsSubmitted?: () => void;
+  skipAnimation?: boolean; // Skip animation for completed nodes
 }
 
 export function AnimatedText({ 
@@ -24,10 +26,13 @@ export function AnimatedText({
   feedback,
   onComplete,
   onReset,
-  onPartialSubmit
+  onPartialSubmit,
+  onAllTermsSubmitted,
+  skipAnimation = false
 }: AnimatedTextProps) {
   const [displayedText, setDisplayedText] = useState("");
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [submittedTerms, setSubmittedTerms] = useState<Record<string, { correct: boolean; userAnswer: string }>>({});
   const [activeBlank, setActiveBlank] = useState<string | null>(null);
   const vocabPalette = ["#0ea5e9", "#f97316", "#22c55e", "#ef4444"];
 
@@ -35,6 +40,13 @@ export function AnimatedText({
     if (!isActive) {
       setDisplayedText(""); 
       onReset?.();
+      return;
+    }
+
+    // If skipAnimation is true, show the full text immediately
+    if (skipAnimation) {
+      setDisplayedText(text);
+      onComplete?.();
       return;
     }
 
@@ -58,13 +70,16 @@ export function AnimatedText({
     return () => {
       clearTimeout(startTimer);
     };
-  }, [text, isActive, startDelay]); // Removed onComplete from deps
+  }, [text, isActive, startDelay, skipAnimation]); // Added skipAnimation to deps
 
   if (!isActive) return null;
 
   // Build a map of which words are part of vocabulary terms
   const textLower = displayedText.toLowerCase();
   const vocabMatches: Map<number, { color: string; term: string; termIndex: number; wordIndex: number }> = new Map();
+  
+  // Track unique terms for partial recall
+  const uniqueTerms = new Set<string>();
   
   vocabulary.forEach((vocabTerm, termIndex) => {
     const termLower = vocabTerm.toLowerCase();
@@ -83,11 +98,39 @@ export function AnimatedText({
         vocabMatches.set(startWordIndex + i, { color, term: vocabTerm, termIndex, wordIndex: i });
       }
       
+      if (isErased) {
+        uniqueTerms.add(vocabTerm);
+      }
+      
       startIndex += termLower.length;
     }
   });
 
+  // Check if all terms have been submitted
+  const totalTerms = uniqueTerms.size;
+  const submittedCount = Object.keys(submittedTerms).length;
+  
+  useEffect(() => {
+    if (isErased && totalTerms > 0 && submittedCount === totalTerms) {
+      // All terms submitted, trigger callback after a short delay
+      const timer = setTimeout(() => {
+        onAllTermsSubmitted?.();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [submittedCount, totalTerms, isErased, onAllTermsSubmitted]);
+
   const words = displayedText.split(/\s+/).filter(w => w.length > 0);
+
+  const handleTermSubmit = async (termKey: string, term: string, input: string) => {
+    if (onPartialSubmit) {
+      const result = await onPartialSubmit(term, input);
+      setSubmittedTerms(prev => ({
+        ...prev,
+        [termKey]: { correct: result.correct, userAnswer: input }
+      }));
+    }
+  };
 
   return (
     <div className="text-3xl font-chalk text-gray-900 leading-relaxed relative">
@@ -97,31 +140,22 @@ export function AnimatedText({
         const vocabColor = vocabMatch?.color || vocabPalette[0];
         const isErasedWord = isErased && isVocab;
 
-        // Group multi-word terms? 
-        // For simplicity, if it's a multi-word term, we might just blank out the first word or handle each word.
-        // Let's handle each word individually for now, or better:
-        // If it's the start of a term, render an input for the whole term?
-        // That's complex for wrapping text.
-        // Let's stick to blanking out individual words or the whole term if it fits.
-        
-        // Current approach: Blank out each word.
-        
         if (isErasedWord) {
             const termKey = `${vocabMatch.term}-${vocabMatch.termIndex}`;
-            const isCorrect = feedback === 'correct';
+            const submission = submittedTerms[termKey];
             const inputValue = inputs[termKey] || "";
             
             // Only render input for the first word of the term to avoid splitting inputs
             if (vocabMatch.wordIndex === 0) {
                 return (
                     <span key={idx} className="inline-block mr-3 relative">
-                        {isCorrect ? (
+                        {submission ? (
                              <motion.span 
-                                initial={{ opacity: 0, color: 'green' }} 
+                                initial={{ opacity: 0 }} 
                                 animate={{ opacity: 1 }}
-                                className="font-bold text-green-600"
+                                className={`font-bold ${submission.correct ? 'text-green-600' : 'text-red-600'}`}
                             >
-                                {vocabMatch.term}
+                                {submission.userAnswer}
                             </motion.span>
                         ) : (
                             <span className="relative inline-block min-w-[100px]">
@@ -130,8 +164,8 @@ export function AnimatedText({
                                     value={inputValue}
                                     onChange={(e) => setInputs(prev => ({ ...prev, [termKey]: e.target.value }))}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            onPartialSubmit?.(vocabMatch.term, inputValue);
+                                        if (e.key === 'Enter' && inputValue.trim()) {
+                                            handleTermSubmit(termKey, vocabMatch.term, inputValue);
                                         }
                                     }}
                                     className="bg-transparent border-b-2 border-dashed border-gray-400 focus:border-blue-500 outline-none text-center w-full font-chalk text-blue-600"

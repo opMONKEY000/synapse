@@ -109,6 +109,35 @@ export function TeachingControls({
           </motion.div>
         )}
 
+        {/* Sub-Phase: Continue - Only shown on nodes before recall */}
+        {demoState.subPhase === "continue" && (
+          <motion.div 
+            className="mt-6 space-y-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <p className="text-2xl font-chalk text-gray-900 leading-snug underline decoration-wavy decoration-2 decoration-rose-400">
+              Ready to test your knowledge?
+            </p>
+            
+            <div className="relative inline-block">
+              <button 
+                onClick={onContinue}
+                className="text-xl font-chalk text-gray-900 relative z-10 px-2 py-1"
+              >
+                Yes, let's go!
+              </button>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+              >
+                <SmallHandDrawnBox delay={0} />
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+
         {/* User Question Display (blue dot) */}
         {demoState.userQuestion && demoState.subPhase === "user-question" && (
           <motion.div 
@@ -189,18 +218,7 @@ export function TeachingControls({
           </motion.div>
         )}
 
-        {/* Display Submitted Thinking Response */}
-        {demoState.userThinkingResponse && (
-          <motion.div 
-            className="max-w-[600px] mt-4 ml-8"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <p className="text-xl font-chalk text-gray-700 leading-snug italic">
-              {demoState.userThinkingResponse}
-            </p>
-          </motion.div>
-        )}
+
       </div>
     </div>
   );

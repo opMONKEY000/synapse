@@ -64,7 +64,7 @@ Next Node: ${nextNode?.title} (this is where we're heading)
 Vocabulary Terms to Define: ${currentNode.vocabularyTerms.join(", ")}
 
 Generate:
-1. Summary (2-3 sentences explaining this concept and how it connects to the previous node)
+1. Summary (2-3 sentences explaining this concept and how it connects to the previous node. **CRITICAL: You MUST use ALL the vocabulary terms listed above in your summary text.**)
 2. Vocabulary Definitions (clear, concise definitions for each term)
 3. Thinking Question (ONE question that helps the student see how this concept leads naturally into '${nextNode?.title}'. The question should create curiosity about what comes next.)
 4. Complete Metadata (dates, locations, key figures relevant to this concept)
@@ -83,7 +83,7 @@ Previous Node: ${previousNode?.title}
 Vocabulary Terms to Define: ${currentNode.vocabularyTerms.join(", ")}
 
 Generate:
-1. Summary (2-3 sentences explaining this concept and how it connects to the previous node)
+1. Summary (2-3 sentences explaining this concept and how it connects to the previous node. **CRITICAL: You MUST use ALL the vocabulary terms listed above in your summary text.**)
 2. Vocabulary Definitions (clear, concise definitions for each term)
 3. Thinking Question (ONE question that helps the student synthesize and wrap up the key concepts from the entire lesson. Start with something like 'Now that we've covered...' or 'Looking back at the whole story...')
 4. Complete Metadata (dates, locations, key figures relevant to this concept)

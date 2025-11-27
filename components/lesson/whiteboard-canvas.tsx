@@ -47,7 +47,13 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
   const [isRecallSubmitting, setIsRecallSubmitting] = useState(false);
   const [boxDrawKey, setBoxDrawKey] = useState<Record<string, number>>({});
   const [drawnArrows, setDrawnArrows] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number }; key: number }>>([]);
+  const [nodeAnswers, setNodeAnswers] = useState<Record<string, string>>({});
   const prevIndexRef = useRef(currentIndex);
+  
+  // Clear thinking input when moving to a new node
+  useEffect(() => {
+    setThinkingInput("");
+  }, [currentIndex]);
   
   // Motion Values for robust drag/animation handling
   const x = useMotionValue(0);
@@ -68,12 +74,20 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
   const isFullRecall = demoState.phase === 'recall' && (demoState.recallType === 'full-forward' || demoState.recallType === 'full-backward' || demoState.recallType === 'full-comprehensive');
 
   useEffect(() => {
+    // Only mark node as completed if AI is not thinking and content is visible
+    if (demoState.aiThinking) return;
+
     // Mark node as completed after delay
     const timer = setTimeout(() => {
       setCompletedNodes(prev => new Set([...prev, nodes[currentIndex].id]));
     }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [currentIndex, nodes, demoState.aiThinking]);
 
-    // Camera Logic - Only auto-center when locked (recall/quiz)
+  // Camera Logic Effect
+  useEffect(() => {
+    // Only auto-center when locked (recall/quiz)
     if (isLocked) {
       let targetX = -currentPosition.x;
       let targetY = -currentPosition.y;
@@ -128,8 +142,6 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
       animate(y, targetY, { duration: 1.2, ease: "easeInOut" });
       animate(scale, targetScale, { duration: 1.2, ease: "easeInOut" });
     }
-
-    return () => clearTimeout(timer);
   }, [currentIndex, nodes, currentPosition, x, y, scale, demoState.cameraMode, demoState.phase, isLocked, nodePositions]);
 
   useEffect(() => {
@@ -236,14 +248,38 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
                         </div>
                     )}
                     <div className="relative inline-block mb-12">
-                      {/* Thinking Feedback from previous node - shows above title */}
-                      {/* Thinking Feedback - Green Dot (Moved from bottom and made relative) */}
-                      {demoState.thinkingFeedback && isCurrent && demoState.subPhase === "content" && (
+                      {/* AI Thinking Indicator - Pulsing Dot */}
+                      {demoState.aiThinking && isCurrent && demoState.subPhase === "content" && (
                         <motion.div 
                           className="flex items-start gap-3 mb-8 max-w-2xl"
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2 }}
+                        >
+                          <motion.span 
+                            className="h-4 w-4 rounded-full bg-green-500 inline-block shrink-0 mt-2"
+                            animate={{ 
+                              scale: [1, 1.3, 1],
+                              opacity: [1, 0.6, 1]
+                            }}
+                            transition={{ 
+                              duration: 1.5, 
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                          <p className="text-2xl font-chalk text-gray-800 leading-relaxed text-left italic">
+                            Thinking...
+                          </p>
+                        </motion.div>
+                      )}
+
+                      {/* Thinking Feedback from previous node - shows above title */}
+                      {demoState.thinkingFeedback && isCurrent && demoState.subPhase === "content" && (
+                        <motion.div 
+                          className="flex items-start gap-3 mb-8 max-w-2xl"
+                          initial={isCompleted ? { opacity: 1, y: 0 } : { opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={isCompleted ? { duration: 0 } : { delay: 0.2 }}
                         >
                           <span className="h-4 w-4 rounded-full bg-green-500 inline-block shrink-0 mt-2" />
                           <p className="text-2xl font-chalk text-gray-800 leading-relaxed text-left">
@@ -252,117 +288,147 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
                         </motion.div>
                       )}
                       
-                      <motion.h2 
-                        className="text-4xl font-chalk font-bold text-gray-900 leading-tight"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        onAnimationComplete={() => setTitleComplete(prev => ({ ...prev, [node.id]: true }))}
-                      >
-                        {node.title}
-                      </motion.h2>
-                      
-                      {/* Hand-drawn underline */}
-                      <motion.svg
-                        className="absolute -bottom-6 left-0 w-full h-6 pointer-events-none"
-                        viewBox="0 0 100 10"
-                        preserveAspectRatio="none"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.4 }}
-                      >
-                        <motion.path
-                          d="M 0,5 Q 25,3 50,5 T 100,5"
-                          stroke="#1e293b"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          fill="none"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1 }}
-                          transition={{ duration: 0.6, ease: "easeInOut", delay: 0.5 }}
-                        />
-                      </motion.svg>
+                      {/* Only show title after AI feedback is ready (or if no feedback expected) */}
+                      {(!demoState.aiThinking || demoState.thinkingFeedback) && (
+                        <>
+                          <motion.h2 
+                            className="text-4xl font-chalk font-bold text-gray-900 leading-tight"
+                            initial={isCompleted ? { opacity: 1 } : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={isCompleted ? { duration: 0 } : { delay: demoState.thinkingFeedback ? 0.5 : 0.2 }}
+                            onAnimationComplete={() => setTitleComplete(prev => ({ ...prev, [node.id]: true }))}
+                          >
+                            {node.title}
+                          </motion.h2>
+                          
+                          {/* Hand-drawn underline */}
+                          <motion.svg
+                            className="absolute -bottom-6 left-0 w-full h-6 pointer-events-none"
+                            viewBox="0 0 100 10"
+                            preserveAspectRatio="none"
+                            initial={isCompleted ? { opacity: 1 } : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={isCompleted ? { duration: 0 } : { delay: demoState.thinkingFeedback ? 0.7 : 0.4 }}
+                          >
+                            <motion.path
+                              d="M 0,5 Q 25,3 50,5 T 100,5"
+                              stroke="#1e293b"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              fill="none"
+                              initial={isCompleted ? { pathLength: 1 } : { pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={isCompleted ? { duration: 0 } : { duration: 0.6, ease: "easeInOut", delay: demoState.thinkingFeedback ? 0.8 : 0.5 }}
+                            />
+                          </motion.svg>
+                        </>
+                      )}
                     </div>
 
-                    {/* Summary Section */}
-                    <div 
-                      className="relative px-3 py-2"
-                      style={{ zIndex: 1 }}
-                    >
-                      <AnimatedText 
-                        text={node.summary} 
-                        vocabulary={node.vocabulary.map(v => v.term)}
-                        startDelay={titleComplete[node.id] ? 1.0 : 1.2}
-                        isActive={isVisible}
-                        isErased={isPartialRecall}
-                        simulatedInput={isPartialRecall ? demoState.simulatedInput : undefined}
-                        feedback={isPartialRecall ? demoState.feedback : undefined}
-                        onComplete={() => {
-                          setSummaryComplete(prev => ({ ...prev, [node.id]: true }));
-                          setTextComplete(prev => ({ ...prev, [node.id]: true }));
-                          setBoxDrawKey(prev => ({ ...prev, [node.id]: (prev[node.id] || 0) + 1 }));
-                        }}
-                        onReset={() => {
-                          setTextComplete(prev => {
-                            if (!prev[node.id]) return prev;
-                            const next = { ...prev };
-                            delete next[node.id];
-                            return next;
-                          });
-                          setBoxDrawKey(prev => {
-                            if (!prev[node.id]) return prev;
-                            const next = { ...prev };
-                            delete next[node.id];
-                            return next;
-                          });
-                        }}
-                        onPartialSubmit={async (term, input) => {
-                            if (onRecallSubmit) {
-                                await onRecallSubmit(input, "partial");
-                            }
-                        }}
-                      />
-                    </div>
-
-                    {/* Vocabulary List with Definitions - Hidden during Partial Recall */}
-                    {!isPartialRecall && isVisible && (
-                        <div className="mt-12 flex flex-col gap-3 text-2xl font-chalk text-gray-900">
-                          {node.vocabulary.map((vocab, vocabIdx) => {
-                            // Calculate dynamic delays based on content length
-                            const summaryDuration = node.summary.length * 0.04; // ~40ms per char to be safe
-                            const baseVocabDelay = 1.2 + summaryDuration + 0.3;
-                            const vocabDelay = baseVocabDelay + (vocabIdx * 0.6);
-
-                            return (
-                              <motion.li 
-                                key={vocab.term}
-                                className="list-none"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: vocabDelay }}
-                              >
-                                <span className="font-bold inline-flex items-center gap-2">
-                                  <span className="h-3 w-3 rounded-full bg-orange-400 inline-block" />
-                                  <span className="underline decoration-2 decoration-sky-500">
-                                    <HandwrittenText text={vocab.term} delay={0} />
-                                  </span>
-                                </span>
-                                <motion.span 
-                                  className="block text-xl leading-snug ml-5 text-gray-700"
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  transition={{ delay: vocabDelay + 0.3 }}
-                                >
-                                  <HandwrittenText text={vocab.definition} delay={0} />
-                                </motion.span>
-                              </motion.li>
-                            );
-                          })}
+                    {/* Summary Section - Only show after AI feedback is ready */}
+                    {(!demoState.aiThinking || demoState.thinkingFeedback) && (
+                      <>
+                        <div 
+                          className="relative px-3 py-2"
+                          style={{ zIndex: 1 }}
+                        >
+                          <AnimatedText 
+                            text={node.summary} 
+                            vocabulary={node.vocabulary.map(v => v.term)}
+                            startDelay={titleComplete[node.id] ? (demoState.thinkingFeedback ? 1.5 : 1.0) : (demoState.thinkingFeedback ? 1.7 : 1.2)}
+                            isActive={isVisible}
+                            isErased={isPartialRecall}
+                            simulatedInput={isPartialRecall ? demoState.simulatedInput : undefined}
+                            feedback={isPartialRecall ? demoState.feedback : undefined}
+                            skipAnimation={isCompleted}
+                            onComplete={() => {
+                              setSummaryComplete(prev => ({ ...prev, [node.id]: true }));
+                              setTextComplete(prev => ({ ...prev, [node.id]: true }));
+                              setBoxDrawKey(prev => ({ ...prev, [node.id]: (prev[node.id] || 0) + 1 }));
+                            }}
+                            onReset={() => {
+                              setTextComplete(prev => {
+                                if (!prev[node.id]) return prev;
+                                const next = { ...prev };
+                                delete next[node.id];
+                                return next;
+                              });
+                              setBoxDrawKey(prev => {
+                                if (!prev[node.id]) return prev;
+                                const next = { ...prev };
+                                delete next[node.id];
+                                return next;
+                              });
+                            }}
+                            onPartialSubmit={async (term, input) => {
+                                // Check if the answer is correct (case-insensitive)
+                                const correct = term.toLowerCase() === input.toLowerCase().trim();
+                                return { correct };
+                            }}
+                            onAllTermsSubmitted={() => {
+                                // All terms submitted, move to next recall step
+                                onContinue?.();
+                            }}
+                          />
                         </div>
+
+                        {/* Partial Recall Notice */}
+                        {isPartialRecall && isCurrent && (
+                          <motion.div
+                            className="mt-6 text-center"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 1.5 }}
+                          >
+                            <p className="text-lg font-chalk text-gray-600 italic">
+                              💡 Press <span className="font-bold text-blue-600">Enter</span> after typing to submit each answer
+                            </p>
+                          </motion.div>
+                        )}
+
+                        {/* Vocabulary List with Definitions - Hidden during Partial Recall */}
+                        {!isPartialRecall && isVisible && (
+                            <div className="mt-12 flex flex-col gap-3 text-2xl font-chalk text-gray-900">
+                              {node.vocabulary.map((vocab, vocabIdx) => {
+                                // Calculate dynamic delays based on content length
+                                const summaryDuration = node.summary.length * 0.04; // ~40ms per char to be safe
+                                const feedbackDelay = demoState.thinkingFeedback ? 0.5 : 0;
+                                const baseVocabDelay = 1.2 + summaryDuration + 0.3 + feedbackDelay;
+                                const vocabDelay = isCompleted ? 0 : baseVocabDelay + (vocabIdx * 0.6);
+
+                                return (
+                                  <motion.li 
+                                    key={vocab.term}
+                                    className="list-none"
+                                    initial={isCompleted ? { opacity: 1 } : { opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={isCompleted ? { duration: 0 } : { delay: vocabDelay }}
+                                  >
+                                    <span className="font-bold inline-flex items-center gap-2">
+                                      <span className="h-3 w-3 rounded-full bg-orange-400 inline-block" />
+                                      <span className="underline decoration-2 decoration-sky-500">
+                                        <HandwrittenText text={vocab.term} delay={0} />
+                                      </span>
+                                    </span>
+                                    <motion.span 
+                                      className="block text-xl leading-snug ml-5 text-gray-700"
+                                      initial={isCompleted ? { opacity: 1 } : { opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      transition={isCompleted ? { duration: 0 } : { delay: vocabDelay + 0.3 }}
+                                    >
+                                      <HandwrittenText text={vocab.definition} delay={0} />
+                                    </motion.span>
+                                  </motion.li>
+                                );
+                              })}
+                            </div>
+                        )}
+                      </>
                     )}
 
                     {/* Phase-Specific Interactions (Teaching) */}
-                    {isCurrent && (
+                    {/* Phase-Specific Interactions (Teaching) */}
+                    {isCurrent ? (
                       <TeachingControls
                         demoState={demoState}
                         node={node}
@@ -376,8 +442,20 @@ export function WhiteboardCanvas({ nodes, currentIndex, demoState, onContinue, o
                         setIsThinkingSubmitting={setIsThinkingSubmitting}
                         onContinue={onContinue}
                         onAskQuestion={onAskQuestion}
-                        onThinkingSubmit={onThinkingSubmit}
+                        onThinkingSubmit={handleThinkingSubmitWrapper}
                       />
+                    ) : (
+                      /* Show past answer if exists */
+                      nodeAnswers[node.id] && (
+                        <div className="mt-8 border-t-2 border-dashed border-gray-300 pt-4">
+                           <p className="text-xl font-chalk text-gray-600 italic mb-2">
+                             <HandwrittenText text={node.thinkingQuestion || "Thinking Question"} />
+                           </p>
+                           <p className="text-2xl font-chalk text-blue-600">
+                             <HandwrittenText text={nodeAnswers[node.id]} />
+                           </p>
+                        </div>
+                      )
                     )}
                   </div>
                 )}

@@ -74,7 +74,7 @@ export function RecallInputCard({
       </div>
 
       {/* AI Response below user input - positioned absolutely to prevent pushing content up */}
-      {demoState.aiResponse && demoState.feedback === 'correct' && (
+      {demoState.aiResponse && (
         <motion.div 
           className="absolute top-full left-0 right-0 mt-8 flex flex-col items-start gap-4"
           initial={{ opacity: 0, y: 10 }}
@@ -88,7 +88,7 @@ export function RecallInputCard({
             </p>
           </div>
           
-          {/* Continue Button for Recall */}
+          {/* Continue Button for Recall - Show after AI feedback */}
           <div className="w-full flex justify-end">
             <button
               onClick={onContinue}
